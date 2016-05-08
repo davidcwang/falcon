@@ -142,7 +142,7 @@ int main() {
    
     turn_right(&drive_cell);
     */
-    //
+ //
 //while(1){
 //    ledGreen = user_button;
 //}
@@ -180,11 +180,16 @@ int main() {
         }
     }
      */
-
-    // drive_cell();
-    // wait(2);
+    /*
+     * The code we had at UCLA. Made some modifications in main.cpp and drive_control.h.
+     * Currently in main we are calling _drive_init()which needs to be called in order to set up the PID constants.
+     * The wait is there because we have to wait before calling _drive_cell otherwise the PID constants will not be
+     * is et before it drive, and therefore the mouse will not move
+     */
+    _drive_init();
     while (1) {
-        _drive_cell();
+        drive_cell();
+        degrees = 90;
+        _turn();
     }
-
 }
