@@ -1,0 +1,99 @@
+#ifndef DRIVE_CONTROL_H
+#define DRIVE_CONTROL_H
+
+#include "pin_assignments.h"
+
+void _drive_cell_() {
+    if (print_count >= 200){
+        print_count = 199;
+    }
+
+//If update has finished before reaching stopping and the next action is to keep driving, just add more distance and keep driving
+    if (UPDATE_FINISHED) {
+        UPDATE_FINISHED = false;
+        if (mouse_action == DRIVE){
+            total_distance += CELL_DISTANCE;
+            last_distance_left += CELL_DISTANCE;
+//pc.printf("keep going\r\n");
+        }
+    }
+
+    int distance_left = total_distance - getEncoderDistance();
+
+//If passed distance or encoder remained still for 50ms (too slow to move), then done (no oversteer control)
+    if (distance_left <= 50 || same_count >= 5){
+
+        drive_ticker.detach();
+
+        stop();
+        DONE_MOVING = true; //Signal to main
+
+        return;
+    }
+
+//P is for distance, D is for velocity. Less distance, lower the speed. Higher the velocity, lower the speed (actually acceleration)
+    float motorSpeed = ((distance_left * distance_P) + ((distance_left - last_distance_left) * distance_D)) / 1000000;
+
+    if (!(last_distance_left - distance_left)){
+        same_count++;
+    }
+    else {
+        same_count = 0;
+    }
+
+    last_distance_left = distance_left;
+
+    if (motorSpeed > drive_top_speed){
+        motorSpeed = drive_top_speed;
+    }
+
+//PID for staying in middle
+    float errorP = 0.0f;
+
+    float irl = leftIR.readIR();
+    float irr = rightIR.readIR();
+    has_left_wall = irl < 12;
+    has_right_wall = irr < 12;
+
+//Seeing both left and right wall
+    if(has_left_wall && has_right_wall){
+        errorP = irl - irr - IR_OFFSET;
+    }
+//only sees left wall and not diagonal
+    else if(has_left_wall){
+        errorP = 0;//(irl - LEFT_IR_MIDDLE_VALUE);// * 2;
+    }
+//only sees right wall and not diagonal
+    else if(has_right_wall){
+        errorP = 0;//(RIGHT_IR_MIDDLE_VALUE - irr);// * 2;
+    }
+//no walls, use encoder
+    else {
+        errorP = 0;//(rightEncoder - leftEncoder) * ENCODER_TO_IR_CONVERSION;
+    }
+
+    float motorSpeedAdjust = position_P * errorP - position_D * (errorP - last_position_error);
+
+    if (motorSpeedAdjust < -drive_top_speed / 2){
+        motorSpeedAdjust = -drive_top_speed / 2;
+    }
+    else if (motorSpeedAdjust > drive_top_speed / 2 ){
+        motorSpeedAdjust = drive_top_speed / 2;
+    }
+//Set speeds
+    leftMotor = motorSpeed - motorSpeedAdjust;
+    rightMotor = motorSpeed + motorSpeedAdjust;
+
+    last_position_error = errorP;
+
+    print_count++;
+
+
+
+//If in next cell, update position and start running maze algorithm
+    if (leftEncoder > next_update_distance && rightEncoder > next_update_distance){
+        next_update_distance += cell_distance;
+        UPDATE_POSITION = true; //Signal to main that it is in next cell and update current position
+    }
+}
+#endif
