@@ -1,0 +1,1 @@
+ok its working with straight test rig but lets go back to full code
