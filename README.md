@@ -1,5 +1,5 @@
 # falcon
-# Summary
+# Directory
 Baseline_Func (Used as backup code)
  - This folder contains the baseline code for the mouse to run. It uses
  - a wall-follower algorithm and does not require the maze.h, maze.cpp,
