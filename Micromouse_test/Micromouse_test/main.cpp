@@ -97,24 +97,40 @@ void move_one_forward(){
     return;   
 
 }
-/*
+
 void turn_one_right(){
     init_pid_consts();
+    resetEncoders();
     while(!break_loop)
     {
         turn_right();
     }
+    //pc.printf("left_encoder_actual is %d\r\n", leftEncoder);
+    //pc.printf("right_encoder_actual is %d\r\n", rightEncoder);
     break_loop = false;
-    resetEncoders();
     init_pid_consts();
-}*/
+}
+
+void turn_one_left(){
+    init_pid_consts();
+    resetEncoders();
+    while(!break_loop)
+    {
+        turn_left();
+    }
+    //pc.printf("left_encoder_actual is %d\r\n", leftEncoder);
+    //pc.printf("right_encoder_actual is %d\r\n", rightEncoder);
+    break_loop = false;
+    init_pid_consts();
+}
+
 void setup() {
     global_state = STARTUP;
     pc.baud(9600);
     
     print_battery();
     if (battery.read() < 0.73f){
-        //ledRed = 1;
+        ledRed = 1;
     }
     
     
@@ -174,20 +190,50 @@ int main() {
                     
                 }
             }*/  
+                
+ /*
+                //turn_one_right();
                 move_one_forward();
                 wait(0.5);
-                
-                turn_right(drive_cell);
+
+                if(!has_right_wall){
+                    turn_one_right();
+                }
+                wait(0.5);
+                move_one_forward();
+                wait(0.5);
+                move_one_forward();
+                if(!has_right_wall){
+                    turn_one_right();
+*/
 
 
-                
-                
-                
-                ledRed = 0;
-           //stop();
-            
+                int count_move = 0;
+                while(count_move < 200){
+                    if(!has_wall_front()){
+                        move_one_forward();
+                    }
+                    else if(!has_right_wall){
+                        turn_one_right();
+                        wait(0.5);
+                        move_one_forward();
+                    }
                     
-
+                    else if(!has_left_wall){
+                        turn_one_left();
+                        wait(0.5);
+                        move_one_forward();
+                    }
+                    
+                    else{
+                        turn_one_right();
+                        wait(0.5);
+                        turn_one_right();
+                    }
+                    wait(0.5);
+                    count_move++;
+                }
+                
 
 
    // }

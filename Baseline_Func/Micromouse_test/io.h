@@ -20,8 +20,8 @@ void print_motor(){
 }
 
 void print_encoder(){
-//    pc.printf("left encoder: %d\r\n" , leftEncoder);
-//    pc.printf("right encoder: %d\r\n" , rightEncoder);
+    pc.printf("left encoder: %d\r\n" , leftEncoder);
+    pc.printf("right encoder: %d\r\n" , rightEncoder);
 }
 
 void print_ir_raw (IRSensor ir){

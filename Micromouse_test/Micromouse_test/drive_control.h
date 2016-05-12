@@ -129,6 +129,16 @@ volatile int last_distance_left;    //
 volatile float last_position_error;
 int same_count; //If last error == this error for this many cycles of pid, then is stuck right before distance so manually stop it
 
+bool has_wall_front(){
+    float irfl = leftFrontIR.readIR();
+    float irfr = rightFrontIR.readIR(); 
+    if(irfl < 12 || irfr < 12){
+        return true;
+    }   
+    else{
+        return false;
+    }
+}
 
 void drive_cell(){
     //UPDATE_POSITION = false;
@@ -285,35 +295,41 @@ void speed_drive_cell(int cells){
     _drive_init();
 }
 
-/*
+
 #define DEGREES_PER_COUNT       0.01875//or 0.019
 #define TURN_P_CONSTANT          0.005 //0.005
-#define TURN_D_CONSTANT          0//0.001
+#define TURN_D_CONSTANT          0.001//0.001
 #define SPEED_TURN_P_CONSTANT          0
 #define SPEED_TURN_D_CONSTANT          0
 volatile float lastDiffP;
 volatile float degrees;
 float turn_P_constant;
 float turn_D_constant;
+float turnDegree;
 
 // Controls the right turn. Uses the PID and the
 // encoder to ensure precision.
+/*
 void turn_right(){
     turn_P_constant = TURN_P_CONSTANT;
     turn_D_constant = TURN_D_CONSTANT;
-    degrees = 90;
     
     DONE_MOVING = false;
-    same_count = 0;
     resetEncoders();
+    turnDegree = 90;
     
     LAST_ACTION_WAS_DRIVE = false;
     
     // PID control code
     float diffP = degrees - 0.01875f  * ((leftEncoder - rightEncoder) >> 1);  //How many more degrees
     
+    pc.printf("degrees is %f\r\n", degrees);
+    pc.printf("diffP is %f\r\n", diffP);
+    pc.printf("lastDiffP is %f\r\n", lastDiffP);
+    pc.printf("same count is %f\r\n", same_count);
+    
     //If reached there within 5 degrees, stop
-    if ((degrees > 0 && diffP < 0) || (degrees < 0 && diffP > 0) || same_count >= 5){
+    if ((degrees > 0 && diffP < 0) || (degrees < 0 && diffP > 0) || same_count >= 2){
         
         //Updates direction mouse is facing
         current_direction = next_direction;
@@ -342,10 +358,55 @@ void turn_right(){
     }
     lastDiffP = diffP;
 }
+*/
+
+void turn_right() {
+ 
+       //wait(1);
+       
+       //Turn_right requires roughly 4500 ticks from encoder. 
+        float motorSpeed = 0.15;
+        int currentEnc = ((leftEncoder - rightEncoder) >> 1);
+        //pc.printf("currentEnc is %d\r\n", currentEnc);
+        if (rightEncoder < -3500 && leftEncoder > 3500)
+        {
+            //Stop motors
+            stop();  
+            break_loop = true;
+            return; 
+        }
+        
+        leftMotor = 0.19995;
+        rightMotor = -0.1555;
+     //   rightMotor = -0.1600;
+}
+
+void turn_left() {
+ 
+       //wait(1);
+       
+       //Turn_right requires roughly 4500 ticks from encoder. 
+        float motorSpeed = 0.15;
+        int currentEnc = ((leftEncoder - rightEncoder) >> 1);
+        //pc.printf("currentEnc is %d\r\n", currentEnc);
+        if (leftEncoder < -3500 && rightEncoder > 3500)
+        {
+            //Stop motors
+            stop();  
+            break_loop = true;
+            return; 
+        }
+        
+    //    rightMotor = 0.19995;
+    //    leftMotor = -0.15555;
+          rightMotor = 0.18695;
+          leftMotor = -0.14255;
+     //   rightMotor = -0.1600;
+}
 
 // Controls the left turn. Uses the PID and the
 // encoder to ensure precision.
-void turn_left(){
+/*void turn_left(){
     turn_P_constant = TURN_P_CONSTANT;
     turn_D_constant = TURN_D_CONSTANT;
     degrees = -90;
@@ -359,7 +420,9 @@ void turn_left(){
     
     // PID control code
     float diffP = degrees - 0.01875f  * ((leftEncoder - rightEncoder) >> 1);  //How many more degrees
-
+    pc.printf("degrees is %f\r\n", degrees);
+    pc.printf("diffP is %f\r\n", diffP);
+    pc.printf("same count is %f\r\n", same_count);
     //If reached there within 5 degrees, stop
     if ((degrees > 0 && diffP < 0) || (degrees < 0 && diffP > 0) || same_count >= 5){
         //Updates direction mouse is facing
@@ -384,16 +447,20 @@ void turn_left(){
     }
     lastDiffP = diffP;
 }
+*/
 
 // Controls the 180 turn. Uses the PID and the
 // encoder to ensure precision.
-*//*
+/*
 void turn_around(void(*done_callback)(void) = NULL){
     turn_P_constant = TURN_P_CONSTANT;
     turn_D_constant = TURN_D_CONSTANT;
     degrees = 180;
     _turn_init(done_callback);
 } */
+
+//BEGIN OLD CODE W/ CALLBACKS FOR TURNING
+/*
 #define DEGREES_PER_COUNT       0.01875//or 0.019
 #define TURN_P_CONSTANT          0.005 //0.005
 #define TURN_D_CONSTANT          0//0.001
@@ -489,5 +556,5 @@ void turn_around(void(*done_callback)(void) = NULL){
     degrees = 180;
     _turn_init(done_callback);
 }
-
+*/
 #endif
