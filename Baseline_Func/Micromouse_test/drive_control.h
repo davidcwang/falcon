@@ -94,7 +94,7 @@ int print_count = 0;
 
 #define PID_SAMPLE_PERIOD               0.005//0.01 //every 5 ms
 
-#define CELL_DISTANCE                   12000  //22566 // = 1024 * (40/8) * (18 / (3.1415*1.3))   encoder_units_per_revolution * gear_ratio * (cell_size / wheel_circumference)
+#define CELL_DISTANCE                   11500 //34050 //22700 //11350  //22566 // = 1024 * (40/8) * (18 / (3.1415*1.3))   encoder_units_per_revolution * gear_ratio * (cell_size / wheel_circumference)
 #define CELL_DISTANCE_DIAGONAL          CELL_DISTANCE * 1.414214
 #define MOUSE_LENGTH                    4300
 #define DISTANCE_TO_NEXT_CELL           10600//CELL_DISTANCE/2 + MOUSE_LENGTH/2 //Distance to drive to ensure mouse is fully in next cell
@@ -102,20 +102,24 @@ int print_count = 0;
 
 #define DRIVE_CELL_DISTANCE_P           22//8.66 //divided by 10e6
 #define DRIVE_CELL_DISTANCE_D           43.5 //divided by 10e6
+
 #define SPEED_DRIVE_CELL_DISTANCE_P     0 //divided by 10e6
 #define SPEED_DRIVE_CELL_DISTANCE_D     0 //divided by 10e6
 #define SPEED_DRIVE_CELL_DISTANCE_DIAGONAL_P 0 //divided by 10e6
 #define SPEED_DRIVE_CELL_DISTANCE_DIAGONAL_D 0 //divided by 10e6
 #define DRIVE_CELL_POSITION_P           0.02f //0.05 to 0.1
-#define DRIVE_CELL_POSITION_D           0 //0 seems good
+#define DRIVE_CELL_POSITION_D           0 //0.15f //0.10f //0 seems good
+
 #define DRIVE_CELL_POSITION_DIAGONAL_P  0
 #define DRIVE_CELL_POSITION_DIAGONAL_D  0
-#define ENCODER_TO_IR_CONVERSION        0
+#define ENCODER_TO_IR_CONVERSION        3
 
-#define LEFT_IR_MIDDLE_VALUE            5.365f//4.387f
-#define RIGHT_IR_MIDDLE_VALUE           5.135f//4.634f
-#define IR_OFFSET                       0.23f//-0.147f
+#define LEFT_IR_MIDDLE_VALUE            4.66f//5.365f//4.387f
+#define RIGHT_IR_MIDDLE_VALUE           5.75f//5.135f//4.634f
+#define IR_OFFSET                       1.09f//-0.147f
 
+//Left Dead Center is 0.82 --> 4.94
+//Right Dead Center is 0.78 --> 5.84
 
 bool not_diagonal;  //Is not driving diagonally
 int total_distance; //Total distance to drive
@@ -131,10 +135,10 @@ int same_count; //If last error == this error for this many cycles of pid, then 
 
 bool has_wall_front(){
     float irfl = leftFrontIR.readIR();
-    float irfr = rightFrontIR.readIR(); 
-    if(irfl < 12 || irfr < 12){
+    //float irfr = rightFrontIR.readIR(); 
+    if(irfl < 12) {//|| irfr < 12){
         return true;
-    }   
+    }
     else{
         return false;
     }
@@ -142,7 +146,6 @@ bool has_wall_front(){
 
 void drive_cell(){
     //UPDATE_POSITION = false;
-    ledGreen = 1;
     // initialize distances for pid
     cell_distance = CELL_DISTANCE;
     distance_P = DRIVE_CELL_DISTANCE_P;
@@ -154,7 +157,7 @@ void drive_cell(){
     if (print_count >= 200){
         print_count = 199;
     }
-    
+
 
     //If update has finished before reaching stopping and the next action is to keep driving, just add more distance and keep driving
     if (UPDATE_FINISHED) {
@@ -171,7 +174,7 @@ void drive_cell(){
     //pc.printf("same_count: %d\r\n", same_count);
     //pc.printf("distance_left: %d\r\n", distance_left);
 
-    
+
     //If passed distance or encoder remained still for 50ms (too slow to move), then done (no oversteer control)
     if (distance_left <= 50 || same_count >= 5){
         //drive_ticker.detach();
@@ -179,7 +182,6 @@ void drive_cell(){
         stop();
         DONE_MOVING = true; //Signal to main
 
-        ledYellow = 1;
         break_loop = true;
         return;
     }
@@ -198,9 +200,10 @@ void drive_cell(){
     if (motorSpeed > drive_top_speed){
         motorSpeed = drive_top_speed;
     }
-    
+
     //PID for staying in middle
     float errorP = 0.0f;
+    float errorD = 0.0f;
 
     float irl = leftIR.readIR();
     float irr = rightIR.readIR();
@@ -210,29 +213,41 @@ void drive_cell(){
     //Seeing both left and right wall
     if(has_left_wall && has_right_wall){
         errorP = irl - irr - IR_OFFSET;
+        errorD = errorP - last_position_error;
     }
-        //only sees left wall and not diagonal
+    
+    //only sees left wall and not diagonal
     else if(has_left_wall){
-        errorP = 0;//(irl - LEFT_IR_MIDDLE_VALUE);// * 2;
+    //    if(!(distance_left > 3700 && distance_left < 7200))
+            errorP = (irl - LEFT_IR_MIDDLE_VALUE);
+        errorD = errorP - last_position_error;
     }
-        //only sees right wall and not diagonal
+    
+    //only sees right wall and not diagonal
     else if(has_right_wall){
-        errorP = 0;//(RIGHT_IR_MIDDLE_VALUE - irr);// * 2;
+    //    if(!(distance_left > 3700 && distance_left < 7200))
+            errorP = (RIGHT_IR_MIDDLE_VALUE - irr);
+        
+        errorD = errorP - last_position_error;
+        
     }
         //no walls, use encoder
     else {
-        errorP = 0;//(rightEncoder - leftEncoder) * ENCODER_TO_IR_CONVERSION;
+        errorP = 0; //(leftEncoder*1.05 - rightEncoder) * ENCODER_TO_IR_CONVERSION;
+        errorD = 0;
     }
 
-    float motorSpeedAdjust = position_P * errorP - position_D * (errorP - last_position_error);
+    float motorSpeedAdjust = (position_P * errorP) - position_D * (errorD);
 
-    if (motorSpeedAdjust < -drive_top_speed / 2){
+    /*if (motorSpeedAdjust < -drive_top_speed / 2){
         motorSpeedAdjust = -drive_top_speed / 2;
     }
     else if (motorSpeedAdjust > drive_top_speed / 2 ){
         motorSpeedAdjust = drive_top_speed / 2;
-    }
+    }*/
     //pc.printf("Current motor speed: ", motorSpeed);
+    
+
     //Set speeds
     ledRed = 1;
     leftMotor = motorSpeed - motorSpeedAdjust;
@@ -250,13 +265,12 @@ void drive_cell(){
         next_update_distance += cell_distance;
         UPDATE_POSITION = true; //Signal to main that it is in next cell and update current position
     }
- //   return;
+    //   return;
 }
 
 //Initializes driving using preset constraints
 void _drive_init(){
     DONE_MOVING = false;
-    ledGreen = 1;
     same_count = 0;
 
     //Keeps using last drive encoder over/under values if drive again
@@ -283,278 +297,81 @@ void init_pid_consts(){
     return;
 }
 
-
-//Speed run function to drive straight for given number of cells. Updates maze in every cell as usual
-void speed_drive_cell(int cells){
-    cell_distance = CELL_DISTANCE;
-    distance_P = SPEED_DRIVE_CELL_DISTANCE_P;
-    distance_D = SPEED_DRIVE_CELL_DISTANCE_D;
-    position_P = DRIVE_CELL_POSITION_P;
-    position_D = DRIVE_CELL_POSITION_D;
-    total_distance = CELL_DISTANCE * cells;
-    _drive_init();
-}
-
-
-#define DEGREES_PER_COUNT       0.01875//or 0.019
-#define TURN_P_CONSTANT          0.005 //0.005
-#define TURN_D_CONSTANT          0.001//0.001
-#define SPEED_TURN_P_CONSTANT          0
-#define SPEED_TURN_D_CONSTANT          0
-volatile float lastDiffP;
-volatile float degrees;
-float turn_P_constant;
-float turn_D_constant;
-float turnDegree;
-
-// Controls the right turn. Uses the PID and the
-// encoder to ensure precision.
-/*
-void turn_right(){
-    turn_P_constant = TURN_P_CONSTANT;
-    turn_D_constant = TURN_D_CONSTANT;
-    
-    DONE_MOVING = false;
-    resetEncoders();
-    turnDegree = 90;
-    
-    LAST_ACTION_WAS_DRIVE = false;
-    
-    // PID control code
-    float diffP = degrees - 0.01875f  * ((leftEncoder - rightEncoder) >> 1);  //How many more degrees
-    
-    pc.printf("degrees is %f\r\n", degrees);
-    pc.printf("diffP is %f\r\n", diffP);
-    pc.printf("lastDiffP is %f\r\n", lastDiffP);
-    pc.printf("same count is %f\r\n", same_count);
-    
-    //If reached there within 5 degrees, stop
-    if ((degrees > 0 && diffP < 0) || (degrees < 0 && diffP > 0) || same_count >= 2){
+void turn_around() {
+       //Turn_right requires roughly 4500 ticks from encoder. 
+        int currentEnc = ((leftEncoder - rightEncoder) >> 1);
+        //pc.printf("currentEnc is %d\r\n", currentEnc);
+        if (leftEncoder < -8000)
+        {
+            leftMotor = 0;    
+        }
         
-        //Updates direction mouse is facing
-        current_direction = next_direction;
-        //Callback (to drive) if not null
+        if (rightEncoder > 8000)
+        {
+            rightMotor = 0;
+        }
+        if (leftEncoder < -8000 && rightEncoder > 8000)
+        {
+            //Stop motors
+            stop();  
+            break_loop = true;
+            return; 
+        }
+          rightMotor = 0.19695;
+          leftMotor = -0.17255;
 
-        DONE_MOVING = true;
-        stop();
-        
-        //pc.printf("left_encoder_actual: %d\r\n", leftEncoder);
-        //pc.printf("right_encoder_actual: %d\r\n", rightEncoder);
-        break_loop = true;
-        return;
-    }
-    
-    float motorSpeed = diffP * turn_P_constant - (lastDiffP - diffP) * turn_D_constant;
-    if (motorSpeed > turn_top_speed){
-        motorSpeed = turn_top_speed;
-    }
-    else if (motorSpeed < -turn_top_speed){
-        motorSpeed = -turn_top_speed;
-    }
-    turn(motorSpeed); 
-    
-    if (diffP == lastDiffP){
-        same_count++;
-    }
-    lastDiffP = diffP;
 }
-*/
 
 void turn_right() {
- 
-       //wait(1);
-       
        //Turn_right requires roughly 4500 ticks from encoder. 
-        float motorSpeed = 0.15;
         int currentEnc = ((leftEncoder - rightEncoder) >> 1);
-        //pc.printf("currentEnc is %d\r\n", currentEnc);
-        if (rightEncoder < -3500 && leftEncoder > 3500)
+
+        if (rightEncoder < -4000)
         {
-            //Stop motors
-            stop();  
+            rightMotor = 0;
+        }
+        
+        if (leftEncoder > 4000)
+        {
+            leftMotor = 0;
+        }
+        
+        if (rightEncoder < -4000 && leftEncoder > 4000)
+        {
+          //  Stop motors
+         //   stop();
             break_loop = true;
             return; 
         }
-        
-        leftMotor = 0.19995;
-        rightMotor = -0.1555;
-     //   rightMotor = -0.1600;
+          leftMotor = 0.19695;
+          rightMotor = -0.17255;
 }
+
+
 
 void turn_left() {
- 
-       //wait(1);
-       
-       //Turn_right requires roughly 4500 ticks from encoder. 
-        float motorSpeed = 0.15;
+       //Turn_left requires roughly 4500 ticks from encoder. 
         int currentEnc = ((leftEncoder - rightEncoder) >> 1);
-        //pc.printf("currentEnc is %d\r\n", currentEnc);
-        if (leftEncoder < -3500 && rightEncoder > 3500)
+        if (leftEncoder < -3250)
+        {
+            leftMotor = 0;    
+        }
+        
+        if (rightEncoder > 3250)
+        {
+            rightMotor = 0;
+        }
+        if (leftEncoder < -3250 && rightEncoder > 3250)
         {
             //Stop motors
-            stop();  
+            //stop();  
             break_loop = true;
             return; 
         }
-        
-    //    rightMotor = 0.19995;
-    //    leftMotor = -0.15555;
           rightMotor = 0.18695;
           leftMotor = -0.14255;
-     //   rightMotor = -0.1600;
 }
 
-// Controls the left turn. Uses the PID and the
-// encoder to ensure precision.
-/*void turn_left(){
-    turn_P_constant = TURN_P_CONSTANT;
-    turn_D_constant = TURN_D_CONSTANT;
-    degrees = -90;
-    
-    DONE_MOVING = false;
-    same_count = 0;
-    if (LAST_ACTION_WAS_DRIVE){
-        //wait(0.1);
-    }
-    LAST_ACTION_WAS_DRIVE = false;
-    
-    // PID control code
-    float diffP = degrees - 0.01875f  * ((leftEncoder - rightEncoder) >> 1);  //How many more degrees
-    pc.printf("degrees is %f\r\n", degrees);
-    pc.printf("diffP is %f\r\n", diffP);
-    pc.printf("same count is %f\r\n", same_count);
-    //If reached there within 5 degrees, stop
-    if ((degrees > 0 && diffP < 0) || (degrees < 0 && diffP > 0) || same_count >= 5){
-        //Updates direction mouse is facing
-        current_direction = next_direction;
-
-        DONE_MOVING = true;
-        stop();   
-        //pc.printf("left_encoder_actual: %d\r\n", leftEncoder);
-        //pc.printf("right_encoder_actual: %d\r\n", rightEncoder);
-        return;
-    }
-    float motorSpeed = diffP * turn_P_constant - (lastDiffP - diffP) * turn_D_constant;
-    if (motorSpeed > turn_top_speed){
-        motorSpeed = turn_top_speed;
-    }
-    else if (motorSpeed < -turn_top_speed){
-        motorSpeed = -turn_top_speed;
-    }
-    turn(motorSpeed);
-    if (diffP == lastDiffP){
-        same_count++;
-    }
-    lastDiffP = diffP;
-}
-*/
-
-// Controls the 180 turn. Uses the PID and the
-// encoder to ensure precision.
-/*
-void turn_around(void(*done_callback)(void) = NULL){
-    turn_P_constant = TURN_P_CONSTANT;
-    turn_D_constant = TURN_D_CONSTANT;
-    degrees = 180;
-    _turn_init(done_callback);
-} */
-
-//BEGIN OLD CODE W/ CALLBACKS FOR TURNING
-/*
-#define DEGREES_PER_COUNT       0.01875//or 0.019
-#define TURN_P_CONSTANT          0.005 //0.005
-#define TURN_D_CONSTANT          0//0.001
-#define SPEED_TURN_P_CONSTANT          0
-#define SPEED_TURN_D_CONSTANT          0
-volatile float lastDiffP;
-volatile float degrees;
-float turn_P_constant;
-float turn_D_constant;
-void(*_turn_callback)(void) = NULL;
-Ticker drive_ticker;
-//Internal turn function, called by turn_right/left/around
-void _turn(){
-    // PID control code
-    float diffP = degrees - 0.01875f  * ((leftEncoder - rightEncoder) >> 1);  //How many more degrees
-
-    //If reached there within 5 degrees, stop
-    if ((degrees > 0 && diffP < 0) || (degrees < 0 && diffP > 0) || same_count >= 5){
-        drive_ticker.detach();
 
 
-        //Updates direction mouse is facing
-        current_direction = next_direction;
-        //Callback (to drive) if not null
-        if (_turn_callback){
-            stop();
-            _turn_callback();
-        }
-            //Otherwise it can stop moving
-        else {
-            DONE_MOVING = true;
-            stop();
-        }
-
-        //pc.printf("left_encoder_actual: %d\r\n", leftEncoder);
-        //pc.printf("right_encoder_actual: %d\r\n", rightEncoder);
-
-        return;
-    }
-
-    float motorSpeed = diffP * turn_P_constant - (lastDiffP - diffP) * turn_D_constant;
-    if (motorSpeed > turn_top_speed){
-        motorSpeed = turn_top_speed;
-    }
-    else if (motorSpeed < -turn_top_speed){
-        motorSpeed = -turn_top_speed;
-    }
-    turn(motorSpeed);
-
-    if (diffP == lastDiffP){
-        same_count++;
-    }
-    lastDiffP = diffP;
-}
-
-//Initializes the turn using preset constraints
-void _turn_init(void(*done_callback)(void)){
-    DONE_MOVING = false;
-    same_count = 0;
-    resetEncoders();
-    if (LAST_ACTION_WAS_DRIVE){
-        //wait(0.1);
-    }
-    LAST_ACTION_WAS_DRIVE = false;
-
-    drive_ticker.attach(&_turn, PID_SAMPLE_PERIOD);
-    _turn_callback = done_callback;
-}
-
-// Controls the right turn. Uses the PID and the
-// encoder to ensure precision.
-void turn_right(void(*done_callback)(void) = NULL){
-    turn_P_constant = TURN_P_CONSTANT;
-    turn_D_constant = TURN_D_CONSTANT;
-    degrees = 90;
-    _turn_init(done_callback);
-}
-
-// Controls the left turn. Uses the PID and the
-// encoder to ensure precision.
-void turn_left(void(*done_callback)(void) = NULL){
-    turn_P_constant = TURN_P_CONSTANT;
-    turn_D_constant = TURN_D_CONSTANT;
-    degrees = -90;
-    _turn_init(done_callback);
-}
-
-// Controls the 180 turn. Uses the PID and the
-// encoder to ensure precision.
-void turn_around(void(*done_callback)(void) = NULL){
-    turn_P_constant = TURN_P_CONSTANT;
-    turn_D_constant = TURN_D_CONSTANT;
-    degrees = 180;
-    _turn_init(done_callback);
-}
-*/
 #endif

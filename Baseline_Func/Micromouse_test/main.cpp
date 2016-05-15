@@ -11,12 +11,15 @@
 
 
 //Internal for elsewhere
-int next_cell_direction = 0; //TOP
+int next_cell_dir = 0; //TOP
 int direction; //maze internal
 
 //Signals from/to elsewhere:
+//int current_direction = NORTH;
+//next_dir = NORTH;
 int current_direction = NORTH;
-int next_direction = -1; //A direction or AT_BEGINNING or AT_CENTER
+int next_dir = NORTH; //A direction or AT_BEGINNING or AT_CENTER
+
 int drive_distance = 1; //MAZE MUST SPECIFY DISTANCE TO DRIVE IN SPEED DRIVE MODE
 
 int mouse_x = 0;
@@ -68,13 +71,11 @@ enum MouseAction {
     TURN_RIGHT_DIAGONAL,
     DRIVE_DIAGONAL,
     ARRIVED_AT_CENTER,
-    ARRIVED_AT_BEGINNING
 };
 MouseAction mouse_action;
 
 
-#include "maze.h"
-vector<Cell*> stack;
+
 #include "drive_control.h"
 #include "io.h"
 
@@ -89,6 +90,7 @@ void move_one_forward(){
     while(!break_loop)
     {
         drive_cell();
+        wait_ms(1);
     }
     break_loop = false;
     resetEncoders();
@@ -104,9 +106,22 @@ void turn_one_right(){
     while(!break_loop)
     {
         turn_right();
+        wait_ms(2);
     }
     //pc.printf("left_encoder_actual is %d\r\n", leftEncoder);
     //pc.printf("right_encoder_actual is %d\r\n", rightEncoder);
+    break_loop = false;
+    init_pid_consts();
+}
+
+void turn_one_around() {
+    init_pid_consts();
+    resetEncoders();
+    while(!break_loop)
+    {
+        turn_around();
+        wait_ms(2);   
+    }   
     break_loop = false;
     init_pid_consts();
 }
@@ -117,9 +132,8 @@ void turn_one_left(){
     while(!break_loop)
     {
         turn_left();
+        wait_ms(2);
     }
-    //pc.printf("left_encoder_actual is %d\r\n", leftEncoder);
-    //pc.printf("right_encoder_actual is %d\r\n", rightEncoder);
     break_loop = false;
     init_pid_consts();
 }
@@ -132,9 +146,6 @@ void setup() {
     if (battery.read() < 0.73f){
         ledRed = 1;
     }
-    
-    
-    init_maze();
     
     global_state = EXPLORING_TO_CENTER;
     
@@ -151,90 +162,31 @@ void setup() {
     DONE_MOVING = true;
     ledYellow = 0;
 }
+
 int main() {
     setup();
 
     while(!user_button){
-
     }
-    wait(2); 
+    wait(1); 
     _drive_init();
- //   while (1) {
-    //    drive_cell();
-      //  while(!UPDATE_POSITION){
-            /*
-            for(;;){
-            //    drive_cell();
-                if(!has_right_wall && has_left_wall){
-                    wait(3);
-                    ledGreen = 1;
-                    ledRed = 0;
-                    ledYellow = 0;
-                    turn_right(drive_cell);
-                    
-                }
-                else if(!has_left_wall && has_right_wall){
-                    wait(3);
-                    turn_left(drive_cell);
-                    ledGreen = 0;
-                    ledRed = 1;
-                    ledYellow = 0;
-                                
-                }
-                else{
-                    wait(3);
-                    drive_cell();
-                    ledGreen = 0;
-                    ledRed = 0;
-                    ledYellow = 1;
-                    
-                }
-            }*/  
-                
- /*
-                //turn_one_right();
-                move_one_forward();
-                wait(0.5);
-
-                if(!has_right_wall){
-                    turn_one_right();
-                }
-                wait(0.5);
-                move_one_forward();
-                wait(0.5);
-                move_one_forward();
-                if(!has_right_wall){
-                    turn_one_right();
-*/
-
-
-                int count_move = 0;
-                while(count_move < 200){
-                    if(!has_wall_front()){
-                        move_one_forward();
-                    }
-                    else if(!has_right_wall){
-                        turn_one_right();
-                        wait(0.5);
-                        move_one_forward();
-                    }
-                    
-                    else if(!has_left_wall){
-                        turn_one_left();
-                        wait(0.5);
-                        move_one_forward();
-                    }
-                    
-                    else{
-                        turn_one_right();
-                        wait(0.5);
-                        turn_one_right();
-                    }
-                    wait(0.5);
-                    count_move++;
-                }
-                
-
-
-   // }
+    while(1){  
+        if(!has_right_wall){
+            turn_one_right();
+            wait(1);
+            move_one_forward();
+        }
+        else if (!has_wall_front()){
+            move_one_forward();
+        }
+        else if(!has_left_wall){
+            turn_one_left();
+            wait(1);
+            move_one_forward();
+        }
+        else{
+            turn_one_around();
+            wait(1);
+        }                   
+    }
 }
